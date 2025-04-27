@@ -3,7 +3,6 @@ from keras import models, Input
 from keras import layers
 
 from keras import utils
-from keras_visualizer import visualizer
 
 
 def main():
