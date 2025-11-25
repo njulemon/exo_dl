@@ -4,8 +4,10 @@ import shutil
 from keras import Sequential
 from keras import layers
 from keras import optimizers
-from keras._tf_keras.keras.preprocessing.image import ImageDataGenerator
-from keras.src.utils import image_dataset_from_directory
+from keras import losses
+from keras import metrics
+
+from keras.utils import image_dataset_from_directory
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
@@ -75,10 +77,10 @@ def build_model():
 
     model = Sequential()
     model.add(layers.Input(shape=(150, 150, 3)))
-    model.add(layers.RandomRotation(factor=1/8, fill_mode='nearest'))
-    model.add(layers.RandomTranslation(width_factor=0.2, height_factor=0.2, fill_mode='nearest'))
-    model.add(layers.RandomZoom(height_factor=0.2, fill_mode='nearest'))
-    model.add(layers.RandomFlip())
+    model.add(layers.RandomTranslation(width_factor=0.1, height_factor=0.1, fill_mode='nearest'))
+    model.add(layers.RandomZoom(height_factor=0.01))
+    model.add(layers.RandomRotation(factor=1./16,))
+    model.add(layers.RandomFlip('horizontal'))
     model.add(layers.Conv2D(32, (3, 3), activation='relu', padding='valid', name='conv1'))
     model.add(layers.MaxPooling2D((2, 2), padding='valid', name='pool1'))
     model.add(layers.Conv2D(64, (3, 3), activation='relu', padding='valid', name='conv2'))
@@ -88,7 +90,7 @@ def build_model():
     model.add(layers.Conv2D(128, (3, 3), activation='relu', padding='valid', name='conv4'))
     model.add(layers.MaxPooling2D((2, 2), padding='valid', name='pool4'))
     model.add(layers.Flatten())
-    model.add(layers.Dropout(0.25))
+    model.add(layers.Dropout(0.5))
     model.add(layers.Dense(512, activation='relu', name='fc1'))
     model.add(layers.Dense(1, activation='sigmoid', name='fc2'))
 
@@ -97,7 +99,7 @@ def build_model():
 def train_model(train_dir, val_dir):
     model = build_model()
     model.summary()
-    model.compile(optimizer=optimizers.RMSprop(learning_rate=1e-4), loss='binary_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer=optimizers.RMSprop(learning_rate=1e-4), loss=losses.BinaryCrossentropy(), metrics=[metrics.binary_accuracy])
 
 
     # pre-process images
@@ -108,32 +110,36 @@ def train_model(train_dir, val_dir):
         train_dir,
         image_size=(150, 150),
         batch_size=32,
-        label_mode='binary'
+        label_mode='binary',
+        pad_to_aspect_ratio=True,
     )
 
-    train_generator = train_generator.map(lambda x, y : (x / 255, y))
+    train_generator = train_generator.map(lambda x, y : (x / 255., y))
+
+    train_generator = train_generator.repeat(5)
 
     val_generator: tf.data.Dataset = image_dataset_from_directory(
         val_dir,
         image_size=(150, 150),
         batch_size=32,
-        label_mode='binary'
+        label_mode='binary',
+        pad_to_aspect_ratio=True,
     )
 
-    val_generator = val_generator.map(lambda x, y : (x / 255, y))
+    val_generator = val_generator.map(lambda x, y : (x / 255., y))
 
     history = model.fit(
         train_generator,
-        steps_per_epoch=100,
-        epochs=100,
+        steps_per_epoch=500,
+        epochs=20,
         validation_data=val_generator,
         validation_steps=50
     )
 
     model.save('ex_p180_1.keras')
 
-    acc = history.history['accuracy']
-    val_acc = history.history['val_accuracy']
+    acc = history.history['binary_accuracy']
+    val_acc = history.history['val_binary_accuracy']
     loss = history.history['loss']
     val_loss = history.history['val_loss']
 
@@ -152,6 +158,7 @@ def train_model(train_dir, val_dir):
 
     plt.show()
     plt.close()
+
 
 
 
